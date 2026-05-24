@@ -1,0 +1,16 @@
+{
+  "name": "codeintel-root",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "codeintelligence/apps/*"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+"scripts": {
+  "dev:backend": "cd codeintelligence/apps/ai-backend && set PYTHONUTF8=1 && venv\\Scripts\\python -m uvicorn main:app --reload",
+  "dev:frontend": "cd codeintelligence/apps/web && npx next dev",
+  "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+}
+}
