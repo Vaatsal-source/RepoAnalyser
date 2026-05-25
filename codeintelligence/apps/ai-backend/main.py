@@ -12,7 +12,7 @@ app = FastAPI(title="CodeIntel AI Backend", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], # Your frontend Dev server URL
+    allow_origins=["http://localhost:3000","http://127.0.0.1:3000"], # Your frontend Dev server URL
     allow_credentials=True,
     allow_methods=["*"],                     # Allows all methods (GET, POST, etc.)
     allow_headers=["*"],                     # Allows all headers

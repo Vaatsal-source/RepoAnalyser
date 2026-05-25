@@ -9,8 +9,8 @@
     "concurrently": "^9.2.1"
   },
 "scripts": {
-  "dev:backend": "cd codeintelligence/apps/ai-backend && set PYTHONUTF8=1 && venv\\Scripts\\python -m uvicorn main:app --reload",
-  "dev:frontend": "cd codeintelligence/apps/web && npx next dev",
+  "dev:backend": "cd codeintelligence/apps/ai-backend && venv\\Scripts\\python -X utf8 -m uvicorn main:app --reload --port 8000",
+  "dev:frontend": "cd codeintelligence/apps/web && npm run dev",
   "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
 }
 }
