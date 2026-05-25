@@ -133,3 +133,6 @@ Frontend: Hosted via Vercel. Configure Root Directory to codeintelligence/apps/w
 
 Backend: Hosted via Render. Point to the root repository and isolate execution parameters via Root Directory: codeintelligence/apps/ai-backend.
 
+<img width="1600" height="760" alt="image" src="https://github.com/user-attachments/assets/557c0f64-f678-4358-990e-1395792b4b87" />
+
+
