@@ -7,12 +7,22 @@ from postgres_client import PostgresClient
 from vector_client import VectorDBClient
 from graph_client import GraphDBClient
 from models import Repository, FileMetadata
+import os
 
 app = FastAPI(title="CodeIntel AI Backend", version="1.0.0")
 
+allowed_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+PRODUCTION_FRONTEND_URL = os.getenv("PRODUCTION_FRONTEND_URL")
+if PRODUCTION_FRONTEND_URL:
+    allowed_origins.append(PRODUCTION_FRONTEND_URL)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","http://127.0.0.1:3000"], # Your frontend Dev server URL
+    allow_origins=allowed_origins,           # Your frontend Dev server URL
     allow_credentials=True,
     allow_methods=["*"],                     # Allows all methods (GET, POST, etc.)
     allow_headers=["*"],                     # Allows all headers
