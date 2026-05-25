@@ -1,4 +1,6 @@
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+// 1. CRITICAL: Strip any trailing slashes from the environment variable if present
+const rawUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const API_BASE_URL = rawUrl.endsWith('/') ? rawUrl.slice(0, -1) : rawUrl;
 
 /**
  * Streams a target Git repository into the multi-model indexing pipeline.
@@ -55,5 +57,17 @@ export const searchCodebase = async (userQuery) => {
   } catch (error) {
     console.error('❌ Search Network Error:', error);
     throw error;
+  }
+};
+
+/**
+ * OPTIONAL ADDITION: Verifies if the Render instance is awake or spinning up
+ */
+export const checkBackendHealth = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/`); // Hits your FastAPI root endpoint
+    return response.ok;
+  } catch {
+    return false;
   }
 };
