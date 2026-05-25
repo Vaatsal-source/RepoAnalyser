@@ -78,3 +78,58 @@ CODEINTEL/                             # Root Workspace Directory
     │       │   └── codeIntelApi.js    # Unified cross-origin Fetch client methods
     │       └── next.config.mjs        # NextJS experimental compiler properties
     └── node_modules/                  # Universal node package workspace pool
+
+🚀 Local Development Setup & Launch
+This platform uses workspace pooling, meaning all JavaScript packages are handled automatically by the master root node folder. Follow these steps to spin up the entire ecosystem on Windows machines:
+
+1. Prerequisites & Environment Check
+Ensure your cloud environment credentials are populated within /apps/ai-backend/.env (masked from tracking):
+
+Plaintext
+
+# Qdrant Vector DB Configuration
+QDRANT_URL=""
+QDRANT_API_KEY=""
+
+# Neo4j Graph DB Configuration
+NEO4J_URI=""
+NEO4J_USER=""
+NEO4J_PASSWORD=""
+
+# Redis Queue Configuration
+REDIS_URL=""
+
+#Gemini API Key
+GEMINI_API_KEY=""
+
+NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:8000"
+
+
+2. Multi-Service Ingestion Installation
+From the absolute root directory (CODEINTEL), run the universal dependency collector:
+
+PowerShell
+npm install
+3. Running the Parallel Server Stack
+To initialize both servers concurrently with strict Windows command stream protection, execute:
+
+PowerShell
+npm run dev
+The automation script will handle the following loops natively:
+
+Backend: Spins up your Python environment with forced UTF-8 console output modes (-X utf8) on http://127.0.0.1:8000.
+
+Frontend: Boots the Turbopack dev compiler on http://localhost:3000.
+
+🛡️ Production & Git Push Safety Controls
+To prevent leaking sensitive environment structures or massive dependency trees, verify the project's tracking indexes prior to staging operations:
+
+PowerShell
+git status
+Disaster Prevention Layer: The absolute root .gitignore blocks .env, internal virtual environments (/venv/), file systems (__pycache__/), and build compilation directories (.next/) globally across all sub-folders.
+
+🛰️ Deployment Topology
+Frontend: Hosted via Vercel. Configure Root Directory to codeintelligence/apps/web.
+
+Backend: Hosted via Render. Point to the root repository and isolate execution parameters via Root Directory: codeintelligence/apps/ai-backend.
+
