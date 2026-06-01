@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { ingestRepository, searchCodebase } from "../src/services/codeIntelApi";
+import { ingestRepository, searchCodebaseStream } from "../src/services/codeIntelApi";
 import ReactMarkdown from "react-markdown";
 
 export default function Home() {
   // Ingestion State
   const [repoUrl, setRepoUrl] = useState("");
   const [repoId, setRepoId] = useState("");
+  const [indexedRepoId, setIndexedRepoId] = useState("");
   const [isIngesting, setIsIngesting] = useState(false);
   const [ingestStatus, setIngestStatus] = useState("");
 
@@ -25,7 +26,10 @@ export default function Home() {
   // Trigger Backend Parsing and Multi-Cloud Storage Sync
   const handleIngest = async (e) => {
     e.preventDefault();
-    if (!repoUrl || !repoId) {
+    const cleanRepoUrl = repoUrl.trim();
+    const cleanRepoId = repoId.trim();
+
+    if (!cleanRepoUrl || !cleanRepoId) {
       alert("Please fill out both the Repository ID and Git URL targets.");
       return;
     }
@@ -36,10 +40,17 @@ export default function Home() {
     );
 
     try {
-      const data = await ingestRepository(repoUrl, repoId);
+      const data = await ingestRepository(cleanRepoUrl, cleanRepoId);
+      setIndexedRepoId(data.repository_id);
       setIngestStatus(
-        `✅ Successfully indexed workspace! Managed ${data.files_indexed} source files.`,
+        `Successfully indexed workspace "${data.repository_id}"! Managed ${data.files_indexed} of ${data.files_discovered ?? data.files_indexed} source files.`,
       );
+      setMessages([
+        {
+          role: "assistant",
+          content: `Workspace "${data.repository_id}" is active. Ask me anything about this repo.`,
+        },
+      ]);
     } catch (err) {
       setIngestStatus(`❌ Ingestion broken: ${err.message}`);
     } finally {
@@ -47,32 +58,67 @@ export default function Home() {
     }
   };
 
-  // Trigger Gemini Vector Embed Search and Completion
+  // Trigger Live Multi-Agent Token Stream via Central API Service
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!userQuery.trim()) return;
+    if (!indexedRepoId) {
+      alert("Please index a workspace before asking the agent.");
+      return;
+    }
 
     const currentQuery = userQuery;
-    setUserQuery(""); // Reset input layout
+    const currentRepoId = indexedRepoId;
+    setUserQuery(""); // Clear input bar immediately
 
-    // Append user prompt instantly to chat array
+    // 1. Append user prompt instantly to chat log
     setMessages((prev) => [...prev, { role: "user", content: currentQuery }]);
     setIsSearching(true);
 
+    // 2. Insert an empty placeholder message shell for the assistant to fill live
+    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
     try {
-      const data = await searchCodebase(currentQuery);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.answer },
-      ]);
+      // FIXED: Passed repoId as the second parameter to constrain searches to the target workspace
+      const response = await searchCodebaseStream(currentQuery, currentRepoId);
+
+      if (!response.body) {
+        throw new Error("No readable network stream returned from backend.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+
+      // 3. Process incoming text data chunks asynchronously
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        
+        const chunkValue = decoder.decode(value, { stream: !done });
+
+        // Target and update only the placeholder entry at the end of the history array
+        setMessages((prev) => {
+          const updated = [...prev];
+          const lastMessageIndex = updated.length - 1;
+          updated[lastMessageIndex] = {
+            ...updated[lastMessageIndex],
+            content: updated[lastMessageIndex].content + chunkValue,
+          };
+          return updated;
+        });
+      }
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
+      // Capture stream disruptions cleanly without crashing the visual dashboard
+      setMessages((prev) => {
+        const updated = [...prev];
+        const lastMessageIndex = updated.length - 1;
+        updated[lastMessageIndex] = {
           role: "assistant",
           content: `❌ Network request layer failed to pull context: ${err.message}`,
-        },
-      ]);
+        };
+        return updated;
+      });
     } finally {
       setIsSearching(false);
     }
@@ -138,6 +184,11 @@ export default function Home() {
                 {ingestStatus}
               </div>
             )}
+            {indexedRepoId && (
+              <div className="mt-3 text-xs text-emerald-400 font-mono">
+                Active workspace: {indexedRepoId}
+              </div>
+            )}
           </div>
         </div>
 
@@ -145,25 +196,30 @@ export default function Home() {
         <div className="md:col-span-2 flex flex-col bg-neutral-900 border border-neutral-800 rounded-xl shadow-lg overflow-hidden h-[75vh]">
           {/* CHAT DISPLAY FEED */}
           <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
-            {messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`flex flex-col max-w-[85%] rounded-xl p-4 text-sm leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-emerald-950/40 border border-emerald-800/50 self-end text-neutral-100"
-                    : "bg-neutral-950 border border-neutral-800 self-start text-neutral-300"
-                }`}
-              >
-                <span className="text-[10px] font-mono tracking-widest uppercase mb-1 block text-neutral-500">
-                  {msg.role === "user" ? "👨‍💻 Developer" : "🤖 CodeIntel Agent"}
-                </span>
-                <div className="prose prose-invert text-sm max-w-none font-sans space-y-2">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+            {messages.map((msg, index) => {
+              // Avoid showing empty trailing bubble blocks until typing has officially commenced
+              if (msg.role === "assistant" && msg.content === "" && isSearching) return null;
+              
+              return (
+                <div
+                  key={index}
+                  className={`flex flex-col max-w-[85%] rounded-xl p-4 text-sm leading-relaxed ${
+                    msg.role === "user"
+                      ? "bg-emerald-950/40 border border-emerald-800/50 self-end text-neutral-100"
+                      : "bg-neutral-950 border border-neutral-800 self-start text-neutral-300"
+                  }`}
+                >
+                  <span className="text-[10px] font-mono tracking-widest uppercase mb-1 block text-neutral-500">
+                    {msg.role === "user" ? "👨‍💻 Developer" : "🤖 CodeIntel Agent"}
+                  </span>
+                  <div className="prose prose-invert text-sm max-w-none font-sans space-y-2">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
-            {isSearching && (
+            {isSearching && messages[messages.length - 1]?.content === "" && (
               <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 text-sm self-start text-neutral-500 animate-pulse font-mono max-w-[85%]">
                 🤖 Vector-space lookup complete. Synthesizing cross-cluster
                 engineering answer...
@@ -180,13 +236,13 @@ export default function Home() {
               type="text"
               value={userQuery}
               onChange={(e) => setUserQuery(e.target.value)}
-              placeholder="Ask a question about the layout structuring, dependencies or styles..."
+              placeholder={indexedRepoId ? "Ask a question about the active workspace..." : "Index a repository before asking questions..."}
               className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-2 text-sm text-neutral-200 focus:outline-none focus:border-emerald-500 transition-colors"
               disabled={isSearching}
             />
             <button
               type="submit"
-              disabled={isSearching || !userQuery.trim()}
+              disabled={isSearching || !userQuery.trim() || !indexedRepoId}
               className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-800 text-neutral-950 px-4 py-2 rounded-lg text-sm font-semibold transition-colors font-mono cursor-pointer"
             >
               Send

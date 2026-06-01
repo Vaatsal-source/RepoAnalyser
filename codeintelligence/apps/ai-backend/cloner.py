@@ -21,13 +21,12 @@ class RepositoryManager:
         self.base_dir = Path(__file__).parent / base_download_dir
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-
     def extract_source_files(self, repo_path):
         """Walks the repository and structural profiles code files for indexing."""
         valid_files = []
         repo_path_obj = Path(repo_path)
 
-        for root, dirs, files in os.walk(repo_path):
+        for root, dirs, files in os.walk(str(repo_path_obj)):
             # Modifying dirs in-place tells os.walk to completely skip walking into ignored paths
             dirs[:] = [d for d in dirs if d not in IGNORED_FOLDERS]
 
@@ -67,23 +66,32 @@ class RepositoryManager:
         func(path)
 
     def clone_repo(self, repo_url, repo_id):
-        """Clones a remote repository to a temporary local workspace tracking folder."""
-        target_path = self.base_dir / repo_id
+        """Sanitizes arguments and clones a remote repository to a local folder."""
+        # FIX: Force-strip hidden whitespaces or trailing spaces from incoming request text strings
+        sanitized_url = str(repo_url).strip()
+        sanitized_id = str(repo_id).strip()
+
+        # Build clean Path object away from Windows syntax limits
+        target_path = self.base_dir / sanitized_id
         
         # Clean up existing duplicate folder path using our Windows-safe handler
         if target_path.exists():
-            print(f"🧹 Found older tracking folder data for {repo_id}. Purging files safely...")
+            print(f"🧹 Found older tracking folder data for {sanitized_id}. Purging files safely...")
             shutil.rmtree(target_path, onerror=self._remove_readonly)
             
-        print(f"📥 Cloning target repository: {repo_url} into storage...")
-        Repo.clone_from(repo_url, target_path, depth=1)
+        print(f"📥 Cloning target repository: {sanitized_url} into storage...")
+        # Passing an absolute path string ensures GitPython maps perfectly onto the shell
+        Repo.clone_from(sanitized_url, str(target_path.resolve()), depth=1)
         return target_path
 
     def cleanup(self, repo_path):
         """Removes the cloned repository directory workspace once parsed."""
-        if repo_path and os.path.exists(repo_path):
+        if repo_path:
             try:
-                shutil.rmtree(repo_path, onerror=self._remove_readonly)
-                print(f"🧹 Cleaned up temporary ingestion directory: {repo_path}")
+                # Convert path types to a unified path layout string representation
+                path_to_remove = str(Path(repo_path).resolve())
+                if os.path.exists(path_to_remove):
+                    shutil.rmtree(path_to_remove, onerror=self._remove_readonly)
+                    print(f"🧹 Cleaned up temporary ingestion directory: {path_to_remove}")
             except Exception as e:
                 print(f"⚠️ Minor warning during cleanup: {str(e)}")

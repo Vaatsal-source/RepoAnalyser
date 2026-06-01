@@ -9,14 +9,15 @@ const API_BASE_URL = rawUrl.endsWith('/') ? rawUrl.slice(0, -1) : rawUrl;
  */
 export const ingestRepository = async (repoUrl, repoId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/ingest`, {
+    // FIXED: Appended missing /api prefix to match main.py router pathing
+    const response = await fetch(`${API_BASE_URL}/api/ingest`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        repository_url: repoUrl,
-        repository_id: repoId,
+        repository_url: repoUrl.trim(),
+        repository_id: repoId.trim(),
       }),
     });
 
@@ -33,18 +34,20 @@ export const ingestRepository = async (repoUrl, repoId) => {
 };
 
 /**
- * Fires a natural language prompt to query the codebase vector layout and synthesize a response.
+ * Legacy synchronous codebase search.
  * @param {string} userQuery - The conversational code exploration request string
+ * @param {string} repoId - The tracking identifier string for the current active workspace
  */
-export const searchCodebase = async (userQuery) => {
+export const searchCodebase = async (userQuery, repoId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/search`, {
+    const response = await fetch(`${API_BASE_URL}/api/search`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        query: userQuery,
+        query: userQuery.trim(),
+        repository_id: repoId.trim(), // FIXED: Scopes vector search to current active repo
       }),
     });
 
@@ -61,11 +64,36 @@ export const searchCodebase = async (userQuery) => {
 };
 
 /**
- * OPTIONAL ADDITION: Verifies if the Render instance is awake or spinning up
+ * Exposes raw stream connection channel directly to UI layouts for seamless ingestion.
+ * @param {string} userQuery - The conversational code exploration request string
+ * @param {string} repoId - The tracking identifier string for the current active workspace
+ */
+export const searchCodebaseStream = async (userQuery, repoId) => {
+  // FIXED: Added repoId argument and packed it inside the body payload
+  const response = await fetch(`${API_BASE_URL}/api/search/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      query: userQuery.trim(),
+      repository_id: repoId.trim(), // FIXED: Injects active tracking context to avoid backend data leaks
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Streaming connection dropped by agent coordinator.');
+  }
+
+  return response;
+};
+
+/**
+ * Verifies if the FastAPI instance is awake and running.
  */
 export const checkBackendHealth = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/`); // Hits your FastAPI root endpoint
+    const response = await fetch(`${API_BASE_URL}/api/health`);
     return response.ok;
   } catch {
     return false;

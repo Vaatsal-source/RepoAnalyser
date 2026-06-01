@@ -1,3 +1,4 @@
+import os
 from postgres_client import PostgresClient
 from graph_client import GraphDBClient
 from search_engine import SemanticSearchEngine
@@ -10,7 +11,10 @@ class UnifiedContextEngine:
         self.graph_client = GraphDBClient()
 
     def construct_ai_context(self, user_query: str):
-        # 1. Fetch the primary semantic code asset match from Qdrant
+        """
+        PRESERVED FOR BACKWARD COMPATIBILITY.
+        Executes a monolithic structural-semantic lookup.
+        """
         vector_matches = self.search_engine.query_codebase(user_query, limit=1)
         if not vector_matches:
             print("⚠️ No semantic matches found.")
@@ -21,18 +25,10 @@ class UnifiedContextEngine:
         
         print(f"🛠️ Gathering cross-cluster context for: {file_path}")
         
-        # 2. Extract Relational Tracking Meta from Neon Postgres
         pg_session = self.pg_client.get_session()
         db_file = pg_session.query(FileMetadata).filter_by(relative_path=file_path).first()
         repo_info = pg_session.query(Repository).filter_by(id=db_file.repository_id).first() if db_file else None
         
-        # 3. Pull structural context from Neo4j Graph using Cypher
-        # We find other files bundled in the exact same repository container node
-        graph_query = """
-        MATCH (r:Repository {id: $repo_id})-[:CONTAINS_FILE]->(sibling:File)
-        WHERE sibling.path <> $current_file
-        RETURN sibling.path AS sibling_path LIMIT 5
-        """
         siblings = []
         if db_file:
             try:
@@ -45,7 +41,6 @@ class UnifiedContextEngine:
 
         pg_session.close()
 
-        # 4. Compile the complete architecture map
         unified_payload = {
             "query": user_query,
             "target_file": file_path,
@@ -61,12 +56,49 @@ class UnifiedContextEngine:
         
         return unified_payload
 
-if __name__ == "__main__":
-    engine = UnifiedContextEngine()
-    
-    # Run a full composite context retrieval challenge query!
-    context_payload = engine.construct_ai_context("Show me the layout structuring scripts.")
-    
-    print("\n📦 === UNIFIED MULTI-MODEL CONTEXT OBJECT ===")
-    import json
-    print(json.dumps(context_payload, indent=2))
+    # --- AGENTIC TARGETED RETRIEVAL EXTENSIONS ---
+
+    def semantic_code_search(self, query: str, repository_id: str = None, limit: int = 2):
+        """
+        Executes a targeted semantic query against the vector database layer.
+        """
+        # FIXED: Forwarding query and repository filtering constraint directly to the active search engine module
+        matches = self.search_engine.query_codebase(
+            query_text=query, 
+            repository_id=repository_id, 
+            limit=limit
+        )
+        return matches
+
+    def relational_meta_lookup(self, file_path: str, repository_id: str = None):
+        """Targeted Neon DB transaction tracking data lookup."""
+        pg_session = self.pg_client.get_session()
+        try:
+            print(f"🗄️ [Neon Postgres] Resolving file tracking states for: {file_path}")
+            file_query = pg_session.query(FileMetadata).filter_by(relative_path=file_path)
+            if repository_id:
+                file_query = file_query.filter_by(repository_id=repository_id)
+
+            db_file = file_query.first()
+            if db_file:
+                repo_info = pg_session.query(Repository).filter_by(id=db_file.repository_id).first()
+                return {
+                    "file_metadata_id": db_file.id,
+                    "repository_id": db_file.repository_id,
+                    "repo_url": repo_info.clone_url if repo_info else None
+                }
+            return None
+        except Exception as e:
+            print(f"❌ Neon DB processing error: {e}")
+            return None
+        finally:
+            pg_session.close()
+
+    def structural_graph_traverse(self, repo_id: str, current_file: str):
+        """Targeted Neo4j Graph traversal engine matching structural dependencies."""
+        try:
+            print(f"🕸️ [Neo4j Aura] Parsing neighborhood topology structures inside: {repo_id}")
+            return self.graph_client.get_file_siblings(repo_id=repo_id, current_file=current_file)
+        except Exception as e:
+            print(f"❌ Neo4j structural network traversal failed: {e}")
+            return []

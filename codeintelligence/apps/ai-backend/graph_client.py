@@ -27,6 +27,17 @@ class GraphDBClient:
             with driver.session() as session:
                 session.run(query, repo_id=repo_id, file_path=file_path)
 
+    def delete_repository(self, repo_id):
+        """Deletes graph nodes for a workspace before re-indexing it."""
+        query = """
+        MATCH (r:Repository {id: $repo_id})
+        OPTIONAL MATCH (r)-[:CONTAINS_FILE]->(f:File {repo_id: $repo_id})
+        DETACH DELETE f, r
+        """
+        with GraphDatabase.driver(self.uri, auth=self.auth) as driver:
+            with driver.session() as session:
+                session.run(query, repo_id=repo_id)
+
     def get_file_siblings(self, repo_id, current_file):
         """Fetches related repository assets sharing the same root structure."""
         query = """
